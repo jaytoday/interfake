@@ -3,14 +3,15 @@ var assert = require('assert');
 var request = require('request');
 var Q = require('q');
 
-request.defaults({
-	json:true
+request = request.defaults({
+	json: true
 });
 
 var get = Q.denodeify(request.get);
 var post = Q.denodeify(request.post);
 var put = Q.denodeify(request.put);
 var del = Q.denodeify(request.del);
+var patch = Q.denodeify(request.patch);
 
 // The thing we're testing
 var Interfake = require('..');
@@ -48,6 +49,17 @@ describe('Interfake Fluent JavaScript API', function () {
 			});
 		});
 
+		it('should create one GET endpoint with a RegExp path', function (done) {
+			interfake = new Interfake();
+			interfake.get(/\/fluent\/.*/);
+			interfake.listen(3000);
+
+			request({ url : 'http://localhost:3000/fluent/whatever', json : true }, function (error, response, body) {
+				assert.equal(response.statusCode, 200);
+				done();
+			});
+		});
+
 		describe('#responseHeaders()', function () {
 			it('should create one GET endpoint which returns custom headers', function (done) {
 				interfake.get('/fluent').responseHeaders({ 'X-Request-Type': 'test', 'X-lol-TEST': 'bleep' });
@@ -74,6 +86,51 @@ describe('Interfake Fluent JavaScript API', function () {
 						assert.equal(response.headers['x-undef'], undefined);
 						done();
 					});
+				});
+			});
+		});
+
+		describe('#proxy()', function () {
+			it('should create one GET endpoint which acts as a proxy for another', function (done) {
+				var proxiedInterfake = new Interfake();
+				proxiedInterfake.get('/whatever').status(404).body({
+					message: 'This is something you proxied!'
+				});
+				proxiedInterfake.listen(3051);
+				interfake.get('/proxy').proxy('http://localhost:3051/whatever');
+				interfake.listen(3000);
+
+				request('http://localhost:3000/proxy', function (error, response, body) {
+					assert.equal(response.statusCode, 404);
+					assert.equal(body.message, 'This is something you proxied!');
+					proxiedInterfake.stop();
+					done();
+				});
+			});
+
+			it('should create one GET endpoint which acts as a proxy for another and sends the specified header', function (done) {
+				var proxiedInterfake = new Interfake({
+					onRequest: function (req) {
+						assert.equal(req.get('Authorization'), 'Basic username:password');
+						proxiedInterfake.stop();
+						done();
+					}
+				});
+				proxiedInterfake.get('/whatever').status(404).body({
+					message: 'This is something you proxied!'
+				});
+				proxiedInterfake.listen(3051);
+				interfake.get('/proxy').proxy({
+					url: 'http://localhost:3051/whatever',
+					headers: {
+						'Authorization': 'Basic username:password'
+					}
+				});
+				interfake.listen(3000);
+
+				request('http://localhost:3000/proxy', function (error, response, body) {
+					assert.equal(response.statusCode, 404);
+					assert.equal(body.message, 'This is something you proxied!');
 				});
 			});
 		});
@@ -129,6 +186,32 @@ describe('Interfake Fluent JavaScript API', function () {
 						assert.equal(results[3][0].statusCode, 512, 'The query-string page without additional params should be found');
 						done();
 					});
+			});
+
+			describe('when a query parameter has an array value', function () {
+				it('should use an array to find array query string params regardless of order', function (done) {
+					interfake.get('/fluent').query({ pages: [ '1', '2' ]}).status(200);
+					interfake.listen(3000);
+
+					Q.all([get({url:'http://localhost:3000/fluent?pages=1&pages=2',json:true}), get({url:'http://localhost:3000/fluent?pages=2&pages=1',json:true})])
+						.then(function (results) {
+							assert.equal(results[0][0].statusCode, 200);
+							assert.equal(results[1][0].statusCode, 200);
+							done();
+						});
+				});
+
+				it('should use an array to find array query string params using the older square-bracket syntax', function (done) {
+					interfake.get('/fluent').query({ pages: [ '1', '2' ]}).status(200);
+					interfake.listen(3000);
+
+					Q.all([get({url:'http://localhost:3000/fluent?pages[]=1&pages[]=2',json:true}), get({url:'http://localhost:3000/fluent?pages[]=2&pages[]=1',json:true})])
+						.then(function (results) {
+							assert.equal(results[0][0].statusCode, 200);
+							assert.equal(results[1][0].statusCode, 200);
+							done();
+						});
+				});
 			});
 
 			describe('#status()', function () {
@@ -372,6 +455,27 @@ describe('Interfake Fluent JavaScript API', function () {
 
 				request.post({ url : 'http://localhost:3000/fluent', json : true }, function (error, response, body) {
 					assert.equal(response.statusCode, 300);
+					done();
+				});
+			});
+		});
+
+		describe('#echo()', function () {
+			it('should return the request body', function (done) {
+				interfake.post('/stuff').echo();
+
+				interfake.listen(3000);
+
+				request.post({
+					url :'http://localhost:3000/stuff',
+					json : true,
+					body : {
+						message : 'Echo!'
+					},
+				},
+				function (error, response, body) {
+					assert.equal(response.statusCode, 200);
+					assert.equal(body.message, 'Echo!');
 					done();
 				});
 			});
@@ -691,6 +795,52 @@ describe('Interfake Fluent JavaScript API', function () {
 							});
 					});
 				});
+			});
+		});
+	});
+
+	describe('#patch()', function () {
+		it('should create one PATCH endpoint', function (done) {
+			interfake.patch('/fluent');
+			interfake.listen(3000);
+
+			request.patch({ url : 'http://localhost:3000/fluent', json : true }, function (error, response, body) {
+				assert.equal(response.statusCode, 200);
+				done();
+			});
+		});
+
+		describe('#extends', function () {
+			it('should create a PATCH endpoint which allows itself to be extended', function (done) {
+				interfake.get('/users').body([
+					{
+						name: 'Max Headroom'
+					}
+				]);
+
+				interfake.patch('/users').extends.get('/users').body([{
+						name: 'Min Headroom'
+					}
+				]);
+
+				interfake.listen(3000);
+
+				get({ url : 'http://localhost:3000/users', json : true })
+					.then(function (results) {
+						assert.equal(results[0].statusCode, 200);
+						assert.equal(results[1].length, 1);
+						return patch({ url : 'http://localhost:3000/users', json : true });
+					})
+					.then(function (results) {
+						assert.equal(results[0].statusCode, 200);
+						return get({ url : 'http://localhost:3000/users', json : true });
+					})
+					.then(function (results) {
+						assert.equal(results[0].statusCode, 200);
+						assert.equal(results[1].length, 2);
+						done();
+					})
+					.catch(done);
 			});
 		});
 	});
@@ -1030,6 +1180,44 @@ describe('Interfake Fluent JavaScript API', function () {
 							assert.equal(results[0].statusCode, 200);
 							assert.equal(results[1].version, 1);
 							return post({url:'http://localhost:3000/fluent',json:true});
+						})
+						.then(function (results) {
+							assert.equal(results[0].statusCode, 200);
+							assert.equal(results[1].version, 2);
+							done();
+						})
+						.done();
+				});
+			});
+
+			describe('#echo()', function () {
+				it('should create a POST endpoint which becomes an echo endpoint when it gets called', function (done) {
+					interfake.post('/fluent').body({ version : 1 }).extends.post('/fluent').echo();
+					interfake.listen(3000);
+
+					post({url:'http://localhost:3000/fluent',json:true})
+						.then(function (results) {
+							assert.equal(results[0].statusCode, 200);
+							assert.equal(results[1].version, 1);
+							return post({ url:'http://localhost:3000/fluent', json : true, body : { version : 5 } });
+						})
+						.then(function (results) {
+							assert.equal(results[0].statusCode, 200);
+							assert.equal(results[1].version, 5);
+							done();
+						})
+						.done();
+				});
+
+				it('should create a POST endpoint which was an echo endpoint but becomes a non-echo endpoint when it gets called', function (done) {
+					interfake.post('/fluent').echo().extends.post('/fluent').body({ version : 2 }).echo(false);
+					interfake.listen(3000);
+
+					post({ url:'http://localhost:3000/fluent', json : true, body : { version : 5 } })
+						.then(function (results) {
+							assert.equal(results[0].statusCode, 200);
+							assert.equal(results[1].version, 5);
+							return post({ url:'http://localhost:3000/fluent', json : true, body : { version : 5 } });
 						})
 						.then(function (results) {
 							assert.equal(results[0].statusCode, 200);

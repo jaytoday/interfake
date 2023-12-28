@@ -1,7 +1,7 @@
 {
   "name": "interfake",
   "preferGlobal": true,
-  "version": "1.9.0",
+  "version": "1.20.0",
   "author": "Daniel Hough <daniel.hough@gmail.com>",
   "description": "A simple way to create dummy APIs",
   "contributors": [
@@ -19,8 +19,8 @@
       "url": "https://github.com/bruce-one"
     },
     {
-      "name": "Sebastian Schürmann",
-      "url": "https://github.com/sebs"
+      "name": "roychoo",
+      "url": "https://github.com/roychoo"
     }
   ],
   "scripts": {
@@ -46,26 +46,28 @@
     "url": "git@github.com:basicallydan/interfake.git"
   },
   "dependencies": {
-    "express": "4.0.0",
-    "commander": "2.1.0",
-    "core-util-is": "^1.0.1",
-    "merge": "^1.1.2",
+    "body-parser": "^1.6.7",
+    "commander": "2.3.0",
     "connect-json": "0.0.0",
-    "body-parser": "~1.0.2",
-    "deepmerge": "git://github.com/basicallydan/deepmerge.git#126cc82a695cc804120cbfd1545003582e1728ed"
+    "core-util-is": "^1.0.1",
+    "deepmerge": "^4.0.0",
+    "express": "^4.16.4",
+    "lodash": "^4.17.15",
+    "merge": "^1.2.1",
+    "serve-static": "^1.13.2",
+    "watchr": "^2.4.13"
   },
   "license": "MIT",
   "engines": {
-    "node": ">=0.8.6"
+    "node": ">=4"
   },
   "main": "./lib/server.js",
   "bin": "./index.js",
   "devDependencies": {
-    "api-easy": "^0.3.8",
-    "mocha": "^1.18.0",
-    "request": "^2.34.0",
-    "q": "^1.0.1",
-    "zombie": "^2.0.0-alpha31",
-    "connect": "^2.14.2"
+    "api-easy": "^0.4.0",
+    "connect": "^3.6.6",
+    "mocha": "^5.2.0",
+    "q": "~1.0.1",
+    "request": "^2.88.0"
   }
 }
